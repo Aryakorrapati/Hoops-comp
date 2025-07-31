@@ -5,9 +5,15 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from project.compare.engine import run_all
 from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 
 app = FastAPI(title="CBB → NBA Comparator")
-app.mount("/Static", StaticFiles(directory="api/Static"), name="static")
+BASE_DIR = Path(__file__).resolve().parent       # == project/api
+app.mount(
+    "/",                                         # serves at the root URL
+    StaticFiles(directory=BASE_DIR / "Static", html=True),
+    name="static"
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],          # or ["http://127.0.0.1:5500"]
