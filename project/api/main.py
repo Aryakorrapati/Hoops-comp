@@ -7,7 +7,7 @@ from project.compare.engine import run_all
 from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="CBB → NBA Comparator")
-app.mount("/static", StaticFiles(directory="api/static"), name="static")
+app.mount("/Static", StaticFiles(directory="api/static"), name="static")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],          # or ["http://127.0.0.1:5500"]
