@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+pandas
+numpy
+scikit-learn
+beautifulsoup4
+lxml
+matplotlib
+requests
+gunicorn            # Render likes Gunicorn for process management
