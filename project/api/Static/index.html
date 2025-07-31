@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>CBB → NBA Comparator</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 2rem; }
+  input { width: 60%; padding: .5rem; }
+  button { padding: .5rem 1rem; }
+  img { max-width: 32%; margin: 1rem .5%; border: 1px solid #ccc; }
+  pre { white-space: pre-wrap; background:#f7f7f7; padding:1rem; }
+</style>
+</head>
+<!-- index.html (only the body section shown) -->
+<body>
+  <h1>CBB → NBA Comparator</h1>
+
+  <input id="url" placeholder="Paste Sports-Reference player URL" />
+  <button onclick="run()">Compare</button>
+
+  <!-- 1️⃣  Text report FIRST -->
+  <pre id="report"></pre>
+
+  <!-- 2️⃣  Images AFTER the text -->
+  <div id="imgs"></div>
+
+<script>
+async function run () {
+  const url = document.getElementById("url").value.trim();
+  if (!url) return alert("Paste a URL first!");
+  document.getElementById("report").textContent = "Loading…";
+  document.getElementById("imgs").innerHTML = "";
+
+  try {
+    const res = await fetch(
+      `http://127.0.0.1:8000/compare?cbb_url=${encodeURIComponent(url)}`
+    );
+    const data = await res.json();          // throws if 4xx/5xx
+
+    // text first
+    document.getElementById("report").textContent = data.text;
+
+    // then images
+    document.getElementById("imgs").innerHTML = data.images
+      .map(b64 => `<img src="data:image/png;base64,${b64}" />`)
+      .join("");
+  } catch (err) {
+    alert("Error: " + err);
+    console.error(err);
+  }
+}
+</script>
+</body>
+</html>
