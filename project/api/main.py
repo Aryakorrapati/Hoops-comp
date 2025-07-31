@@ -1,6 +1,7 @@
 """
-FastAPI wrapper:  http://localhost:8000/compare?cbb_url=<full-sports-ref-url>
+FastAPI wrapper: https://.../compare?cbb_url=<sports-ref-url>
 """
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from project.compare.engine import run_all
@@ -8,28 +9,38 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
 app = FastAPI(title="CBB → NBA Comparator")
-BASE_DIR = Path(__file__).resolve().parent       # == project/api
-app.mount(
-    "/",                                         # serves at the root URL
-    StaticFiles(directory=BASE_DIR / "Static", html=True),
-    name="static"
-)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],          # or ["http://127.0.0.1:5500"]
-    allow_credentials=True,
-    allow_methods=["*"],          # not just ["GET"]
-    allow_headers=["*"],
-)
 
+# ── 1.  API routes FIRST ────────────────────────────────────────────
 @app.get("/compare")
-async def compare(cbb_url: str = Query(..., description="Sports-Reference college player URL")):
+async def compare(
+    cbb_url: str = Query(..., description="Sports-Reference college player URL")
+):
     try:
         return run_all(cbb_url)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-# Dev entry-point:  python -m api.main
+# ── 2.  CORS (optional, keep if you need it) ────────────────────────
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],          # tighten later
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ── 3.  STATIC FILES LAST  (won't mask /compare now) ────────────────
+BASE_DIR = Path(__file__).resolve().parent        # project/api
+app.mount(
+    "/", StaticFiles(directory=BASE_DIR / "Static", html=True), name="static"
+)
+
+# ── 4.  Local dev entry-point (Render ignores this) ────────────────
 if __name__ == "__main__":
     import uvicorn, os
-    uvicorn.run("api.main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)), reload=True)
+    uvicorn.run(
+        "project.api.main:app",  # dotted path from repo root
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", 8000)),
+        reload=True,
+    )
