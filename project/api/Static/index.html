@@ -33,7 +33,7 @@ async function run () {
 
   try {
     const res = await fetch(
-      `http://127.0.0.1:8000/compare?cbb_url=${encodeURIComponent(url)}`
+      `/compare?cbb_url=${encodeURIComponent(url)}`
     );
     const data = await res.json();          // throws if 4xx/5xx
 
