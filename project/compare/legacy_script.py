@@ -10,6 +10,8 @@ from matplotlib.offsetbox import AnchoredText
 from math import erf as _erf
 import sys, re
 from bs4 import Comment
+import random, time
+import requests
 
 if not hasattr(np, "erf"):            # very old NumPy
     np.erf = np.vectorize(_erf)
@@ -719,72 +721,31 @@ def candidate_nbadraft_slugs(name: str):
         yield "-".join(tokens[1:])                    # drop the single initial
         yield "-".join([tokens[0] + tokens[1]] + tokens[2:])  # combine first two
 
-def fetch_nbadraft_ratings(player_name: str):
-    """
-    Try multiple slug candidates until a page returns HTTP 200 and yields ratings.
-    Returns (ratings_dict, missing_fields_set).
-    ratings keys: 'Athleticism','Strength','Quickness' with int or None values.
-    """
-    NBADRAFT_FIELDS = ["Athleticism", "Strength", "Quickness"]
-    base = {k: None for k in NBADRAFT_FIELDS}
+HEADERS = {
+    # rotate a handful if you like
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/125.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "en-US,en;q=0.9",
+}
 
+def fetch_nbadraft_ratings(player_name: str):
+    ...
     for slug in candidate_nbadraft_slugs(player_name):
         url = f"https://www.nbadraft.net/players/{slug}/"
         try:
-            resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
-            if resp.status_code != 200:
-                # try next candidate
+            resp = requests.get(url, headers=HEADERS, timeout=20, allow_redirects=True)
+            if resp.status_code not in (200, 404):
+                print(f"[WARN] {url} HTTP {resp.status_code} – retrying with delay")
+                time.sleep(random.uniform(1.0, 2.0))
                 continue
-        except Exception:
+            if resp.status_code == 404:
+                continue                       # try next slug
+        except requests.RequestException as exc:
+            print(f"[WARN] NBADraft fetch {url} failed: {exc}")
             continue
-
-        soup = BeautifulSoup(resp.text, "html.parser")
-
-        def _clean_val(txt):
-            t = (txt or "").strip().upper()
-            if t in {"N/A", "NA", "-", ""}:
-                return None
-            digits = re.sub(r"[^\d]", "", t)
-            return int(digits) if digits.isdigit() else None
-
-        ratings = dict(base)
-
-        # 1) table layout
-        table = soup.find("table", class_=re.compile("player-detail-table"))
-        if table:
-            for row in table.find_all("tr"):
-                cells = [c.get_text(" ", strip=True) for c in row.find_all(["th", "td"])]
-                if len(cells) >= 2:
-                    key = cells[0].strip().lower()
-                    for fld in NBADRAFT_FIELDS:
-                        if key.startswith(fld.lower()) and ratings[fld] is None:
-                            ratings[fld] = _clean_val(cells[1])
-
-        # 2) text fallback
-        if not all(ratings[f] is not None for f in NBADRAFT_FIELDS):
-            flat = soup.get_text(" ", strip=True)
-            pattern = re.compile(r"\b(athleticism|strength|quickness)\b\s*([0-9]{1,2}|N/?A|-)\b", re.I)
-            for attr, val in pattern.findall(flat):
-                fld = attr.capitalize()
-                if ratings[fld] is None:
-                    ratings[fld] = _clean_val(val)
-
-        # If we got anything, report and return
-        if any(ratings[f] is not None for f in NBADRAFT_FIELDS):
-            print("[INFO] NBADraft ratings for {} ({}): {}".format(
-                player_name, slug,
-                ", ".join(f"{k}={ratings[k] if ratings[k] is not None else 'N/A'}" for k in NBADRAFT_FIELDS)
-            ))
-            missing = {f for f in NBADRAFT_FIELDS if ratings[f] is None}
-            return ratings, missing
-
-        # else try next candidate
-
-    # All candidates failed
-    print(f"[WARN] NBADraft fetch failed for {player_name}: no matching slug.")
-    missing = set(NBADRAFT_FIELDS)
-    return base, missing
-
 # ---------- 2a.  DEFINE input_player_name_lower EARLY --------------
 input_player_name_lower = input_player_name.strip().lower()
 
