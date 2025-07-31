@@ -3,7 +3,7 @@ FastAPI wrapper:  http://localhost:8000/compare?cbb_url=<full-sports-ref-url>
 """
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from compare.engine import run_all
+from project.compare.engine import run_all
 from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="CBB → NBA Comparator")
