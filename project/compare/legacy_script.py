@@ -756,9 +756,28 @@ def fetch_nbadraft_ratings(player_name: str):
 
     for slug in candidate_nbadraft_slugs(player_name):
         url = f"https://www.nbadraft.net/players/{slug}/"
-        html = _get_html_cloudflare(url, random.choice(HEADERS_LIST))
-        if html is None:
-            continue                        # try next slug
+
+        # 1️⃣  ── fetch the raw HTML (your existing code)
+        try:
+            resp = cloudscraper.create_scraper().get(url, timeout=20)
+            if resp.status_code != 200:
+                continue
+        except Exception:
+            continue
+        html = resp.text            # ← this is what we’ll inspect
+
+        # 2️⃣  ── DEBUG DUMP  (insert right here)
+        if "rating-block" in html or "player-detail-table" in html:
+            import re, textwrap
+            snippet = re.search(r"Athleticism(.{0,120})", html, re.I)
+            print(
+                "[RAW]",
+                textwrap.shorten(
+                    snippet.group(0) if snippet else html[:300],
+                    width=200,
+                    placeholder=" … "
+                )
+            )
 
         soup = BeautifulSoup(html, "html.parser")
         ratings = dict(base)
