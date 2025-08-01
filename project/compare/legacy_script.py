@@ -13,6 +13,7 @@ from bs4 import Comment
 import random, time
 import requests
 import cloudscraper
+from .play_fetch import get_html_with_js  
 
 if not hasattr(np, "erf"):            # very old NumPy
     np.erf = np.vectorize(_erf)
@@ -750,64 +751,49 @@ def _get_html_cloudflare(url: str, ua: str) -> str | None:
         print(f"[WARN] NBADraft request failed: {exc}")
         return None
 
+def _extract_int(text: str) -> int | None:
+    m = re.search(r"\d{1,2}", text)
+    return int(m.group()) if m else None
+
 def fetch_nbadraft_ratings(player_name: str):
-    NBADRAFT_FIELDS = ["Athleticism", "Strength", "Quickness"]
     base = {f: None for f in NBADRAFT_FIELDS}
 
     for slug in candidate_nbadraft_slugs(player_name):
         url = f"https://www.nbadraft.net/players/{slug}/"
 
-        # 1️⃣  ── fetch the raw HTML (your existing code)
-        try:
-            resp = cloudscraper.create_scraper().get(url, timeout=20)
-            if resp.status_code != 200:
-                continue
-        except Exception:
-            continue
-        html = resp.text            # ← this is what we’ll inspect
+        # ── 1. quick request via cloudscraper ──────────────────────
+        html = _get_html_cloudflare(url, random.choice(HEADERS_LIST))
+        if html is None:
+            continue                               # try next slug
 
-        # 2️⃣  ── DEBUG DUMP  (insert right here)
-        if "rating-block" in html or "player-detail-table" in html:
-            import re, textwrap
-            snippet = re.search(r"Athleticism(.{0,120})", html, re.I)
-            print(
-                "[RAW]",
-                textwrap.shorten(
-                    snippet.group(0) if snippet else html[:300],
-                    width=200,
-                    placeholder=" … "
-                )
-            )
+        # ── 2. fallback: if no digits in the first HTML, use Playwright ──
+        if not re.search(r"Athleticism.*\d", html, re.I | re.S):
+            html_js = get_html_with_js(url)        # ②  head-less Chromium
+            if html_js:                            #    (returns None on fail)
+                html = html_js                     #    replace with JS-rendered
 
-        import re, textwrap
-        match = re.search(r"Athleticism(.{0,150})</tr>", html, re.I|re.S)
-        print("[DBG-HTML]", textwrap.shorten(match.group(0) if match else html[:400], 250))
-        
-        soup = BeautifulSoup(html, "html.parser")
-        ratings = dict(base)
-
-        # ---- parse the table ----
-        table = soup.find("table", class_="player-detail-table")
+        # ── 3. parse whichever HTML we ended up with ───────────────
+        soup     = BeautifulSoup(html, "html.parser")
+        ratings  = dict(base)
+        table    = soup.find("table", class_=re.compile("player-detail-table"))
         if table:
             for row in table.find_all("tr"):
-                cells = [c.get_text(" ", strip=True) for c in row.find_all(["th", "td"])]
-                if len(cells) >= 2:
-                    key = cells[0].strip().lower()
-                    val = cells[1]
-                    for fld in NBADRAFT_FIELDS:
-                        if key.startswith(fld.lower()):
-                            try:
-                                ratings[fld] = int(val)
-                            except ValueError:
-                                pass
+                cells = row.find_all(["th", "td"])
+                if len(cells) < 2:
+                    continue
+                key = cells[0].get_text(" ", strip=True).title()
+                val = _extract_int(cells[1].get_text(" ", strip=True))
+                if key in NBADRAFT_FIELDS and val is not None:
+                    ratings[key] = val
 
         missing = {f for f, v in ratings.items() if v is None}
-        print(f"[INFO] NBADraft ratings for {player_name} ({slug}): "
-              + ", ".join(f"{k}={ratings[k] or 'N/A'}" for k in NBADRAFT_FIELDS))
+        print(
+            f"[INFO] NBADraft ratings for {player_name} ({slug}): "
+            + ", ".join(f"{k}={ratings[k] or 'N/A'}" for k in NBADRAFT_FIELDS)
+        )
         return ratings, missing
 
-    # fall-back when every slug blocked / missing
-    print(f"[WARN] NBADraft page missing or blocked for {player_name}")
+    # every slug failed
     return base, set(NBADRAFT_FIELDS)
 
 

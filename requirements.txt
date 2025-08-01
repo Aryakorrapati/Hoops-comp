@@ -9,3 +9,4 @@ matplotlib
 requests
 gunicorn          
 cloudscraper>=1.2.71
+playwright>=1.44

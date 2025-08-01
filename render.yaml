@@ -4,7 +4,9 @@ services:
   runtime: python
   region: oregon          # free regions: ohio, oregon, frankfurt
   plan: free
-  buildCommand: pip install -r requirements.txt
+  buildCommand: |
+    pip install -r requirements.txt
+    python -m playwright install --with-deps chromium
   startCommand: >
     gunicorn -w 2 -k uvicorn.workers.UvicornWorker
              --timeout 180                       # ← 3 min
