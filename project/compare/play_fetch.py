@@ -6,6 +6,7 @@ FastAPI / uvicorn event-loop.  Works both inside and outside asyncio.
 import asyncio
 from typing import Optional
 from playwright.sync_api import sync_playwright
+import asyncio, concurrent.futures
 
 # ----- internal worker -------------------------------------------------
 def _fetch_with_playwright(url: str, timeout_ms: int) -> Optional[str]:
@@ -28,9 +29,11 @@ def _fetch_with_playwright(url: str, timeout_ms: int) -> Optional[str]:
 # ----- public helper ---------------------------------------------------
 def get_html_with_js(url: str, timeout_ms: int = 45000) -> Optional[str]:
     """
-    • If called from normal synchronous code, runs Playwright in the same thread.
-    • If called *inside* an asyncio event-loop (FastAPI), off-loads the
-      blocking work to the default thread-pool so the loop keeps breathing.
+    • If we're *inside* an active asyncio loop (FastAPI request thread),
+      off-load the blocking Playwright call to a new worker thread and wait
+      synchronously *outside* the loop.
+    • If no loop is running (CLI / local script), just call Playwright
+      directly in the current thread.
     """
     try:
         loop = asyncio.get_running_loop()
@@ -38,11 +41,10 @@ def get_html_with_js(url: str, timeout_ms: int = 45000) -> Optional[str]:
         loop = None
 
     if loop and loop.is_running():
-        # We are inside FastAPI's event-loop – run sync Playwright in a thread.
-        future = loop.run_in_executor(
-            None, _fetch_with_playwright, url, timeout_ms
-        )
-        return future.result()
+        # We are in the uvicorn event-loop thread – create our own thread pool
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(_fetch_with_playwright, url, timeout_ms)
+            return future.result()          # blocks THIS thread only, loop keeps breathing
     else:
-        # No running loop; just call Playwright directly.
+        # No running loop: simple, direct call
         return _fetch_with_playwright(url, timeout_ms)
