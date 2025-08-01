@@ -12,7 +12,6 @@ import sys, re
 from bs4 import Comment
 import random, time
 import requests
-import cloudscraper
 from project.compare.play_fetch import get_html_with_js  
 import bs4
 
@@ -734,16 +733,14 @@ HEADERS_LIST = [
      "Version/17.0 Safari/605.1.15"),
 ]
 
-def _get_html_cloudflare(url: str, ua: str) -> str | None:
-    """Return page HTML or None on error/ban."""
-    scraper = cloudscraper.create_scraper(
-        browser={"custom": ua},
-        delay=2,                 # polite pause when Cloudflare says “wait”
-    )
+def _get_html_cloudflare(url: str, ua: str) -> str | None:                                           # Pyodide fallback
+    sess = requests.Session()
+    sess.headers.update({"User-Agent": ua})
+
     try:
-        r = scraper.get(url, timeout=25)
+        r = sess.get(url, timeout=25)
         if r.status_code == 404:
-            return None         # slug doesn't exist
+            return None                              # slug doesn’t exist
         if r.status_code != 200:
             print(f"[WARN] NBADraft HTTP {r.status_code} at {url}")
             return None

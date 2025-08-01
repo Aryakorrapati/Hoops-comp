@@ -31,9 +31,9 @@ async function bootPyodide () {
   `);
 
   /* ③ pull the heavy scientific stack */
-  log("Downloading packages (first visit only) …");
+  log("Downloading packages");
   await pyodide.loadPackage([
-    "pandas", "numpy", "matplotlib", "scikit-learn", "scipy", "lxml", "requests",
+    "pandas", "numpy", "matplotlib", "scikit-learn", "scipy", "lxml", "requests", "beautifulsoup4",
   ]);
 
   /* ④ import your monolith and expose run_all */
