@@ -14,6 +14,7 @@ import random, time
 import requests
 import cloudscraper
 from project.compare.play_fetch import get_html_with_js  
+import bs4
 
 if not hasattr(np, "erf"):            # very old NumPy
     np.erf = np.vectorize(_erf)
@@ -755,6 +756,24 @@ def _extract_int(text: str) -> int | None:
     m = re.search(r"\d{1,2}", text)
     return int(m.group()) if m else None
 
+def _digit_from_cell(td: bs4.element.Tag) -> int | None:
+    """
+    1. Look for a numeric substring in the visible text (e.g. '9').
+    2. If not found, look for a CSS class like 'bar-9' and use that digit.
+    """
+    # ① text inside the cell
+    text_num = re.search(r"\d{1,2}", td.get_text(" ", strip=True))
+    if text_num:
+        return int(text_num.group())
+
+    # ② digit inside a class name  bar-7
+    class_match = re.search(r"bar-(\d{1,2})", " ".join(td.get("class", [])))
+    if class_match:
+        return int(class_match.group(1))
+
+    # nothing found
+    return None
+
 def fetch_nbadraft_ratings(player_name: str):
     base = {f: None for f in NBADRAFT_FIELDS}
 
@@ -775,16 +794,17 @@ def fetch_nbadraft_ratings(player_name: str):
         # ── 3. parse whichever HTML we ended up with ───────────────
         soup     = BeautifulSoup(html, "html.parser")
         ratings  = dict(base)
-        table    = soup.find("table", class_=re.compile("player-detail-table"))
+        table = soup.find("table", class_=re.compile("player-detail-table"))
         if table:
             for row in table.find_all("tr"):
-                cells = row.find_all(["th", "td"])
-                if len(cells) < 2:
+                th, *tds = row.find_all(["th", "td"])
+                if not tds:
                     continue
-                key = cells[0].get_text(" ", strip=True).title()
-                val = _extract_int(cells[1].get_text(" ", strip=True))
-                if key in NBADRAFT_FIELDS and val is not None:
-                    ratings[key] = val
+                key = th.get_text(" ", strip=True).title()
+                if key in NBADRAFT_FIELDS and ratings[key] is None:
+                    val = _digit_from_cell(tds[0])      # ← uses the helper
+                    if val is not None:
+                        ratings[key] = val
 
         missing = {f for f, v in ratings.items() if v is None}
         print(
