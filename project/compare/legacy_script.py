@@ -13,7 +13,7 @@ from bs4 import Comment
 import random, time
 import requests
 import cloudscraper
-from .play_fetch import get_html_with_js  
+from project.compare.play_fetch import get_html_with_js  
 
 if not hasattr(np, "erf"):            # very old NumPy
     np.erf = np.vectorize(_erf)
