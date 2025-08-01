@@ -756,23 +756,25 @@ def _extract_int(text: str) -> int | None:
     m = re.search(r"\d{1,2}", text)
     return int(m.group()) if m else None
 
-def _digit_from_cell(td: bs4.element.Tag) -> int | None:
+def _digit_from_cell(td: BeautifulSoup) -> int | None:
     """
-    1. Look for a numeric substring in the visible text (e.g. '9').
-    2. If not found, look for a CSS class like 'bar-9' and use that digit.
+    Return the first 1- or 2-digit number found in the cell, either
+    • in the visible text, or
+    • in any descendant’s class name such as 'bar-9'.
     """
-    # ① text inside the cell
-    text_num = re.search(r"\d{1,2}", td.get_text(" ", strip=True))
-    if text_num:
-        return int(text_num.group())
+    # ① digit in visible text
+    m = re.search(r"\d{1,2}", td.get_text(" ", strip=True))
+    if m:
+        return int(m.group())
 
-    # ② digit inside a class name  bar-7
-    class_match = re.search(r"bar-(\d{1,2})", " ".join(td.get("class", [])))
-    if class_match:
-        return int(class_match.group(1))
+    # ② digit in a class of the <td> *or any child*
+    for tag in td.find_all(True):          # True == every descendant
+        classes = " ".join(tag.get("class", []))
+        m = re.search(r"bar-(\d{1,2})", classes)
+        if m:
+            return int(m.group(1))
 
-    # nothing found
-    return None
+    return None        # nothing found
 
 def fetch_nbadraft_ratings(player_name: str):
     base = {f: None for f in NBADRAFT_FIELDS}
