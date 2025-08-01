@@ -779,6 +779,10 @@ def fetch_nbadraft_ratings(player_name: str):
                 )
             )
 
+        import re, textwrap
+        match = re.search(r"Athleticism(.{0,150})</tr>", html, re.I|re.S)
+        print("[DBG-HTML]", textwrap.shorten(match.group(0) if match else html[:400], 250))
+        
         soup = BeautifulSoup(html, "html.parser")
         ratings = dict(base)
 
