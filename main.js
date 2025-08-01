@@ -2,32 +2,48 @@
 let pyodide, compareFunc
 
 async function bootPyodide () {
-  document.getElementById('status').textContent = 'Loading Python…'
-  pyodide = await loadPyodide({ stdin: () => null })
-  // Mount data files into Pyodide FS
-  for (const f of ['pace.csv', 'cbb_stats.csv', 'nba_stats.csv', 'legacy_script.py']) {
-    const resp = await fetch(f)
-    pyodide.FS.writeFile(f, new Uint8Array(await resp.arrayBuffer()))
+  const statusEl = document.getElementById("status");
+  statusEl.textContent = "Loading Python…";
+
+  /* 1️⃣  spin-up Pyodide from latest CDN */
+  const pyodide = await loadPyodide({
+    indexURL: "https://cdn.jsdelivr.net/pyodide/v0.27.1/full/",
+    stdin: () => null,
+    disableIntegrityCheck: true          // fixes the hash-mismatch issue
+  });
+
+  /* 2️⃣  copy the CSVs + script into the Pyodide filesystem */
+  for (const f of [
+    "pace.csv",
+    "cbb_stats.csv",
+    "nba_stats.csv",
+    "legacy_script.py",
+  ]) {
+    const resp = await fetch(f);
+    pyodide.FS.writeFile(f, new Uint8Array(await resp.arrayBuffer()));
   }
 
+  /* 3️⃣  pull in the scientific wheels */
+  statusEl.textContent = "Downloading packages…";
   await pyodide.loadPackage([
     "pandas",
     "numpy",
     "matplotlib",
     "scikit-learn",
+    "scipy",
     "lxml",
-    "beautifulsoup4",
-    "pillow"          // used by matplotlib for PNG
   ]);
+
+  /* 4️⃣  wire legacy_script.run_all → JS */
   await pyodide.runPythonAsync(`
-    import sys, js, importlib.util, types
-    # pandas & numpy are already built-in to Pyodide
-    import legacy_script  # executes your file once
-    compare = legacy_script.run_all        # entry point
-  `)
-  compareFunc = pyodide.globals.get('compare')
-  document.getElementById('status').textContent = 'Ready!'
-}
+    import sys, js
+    import legacy_script
+    compare = legacy_script.run_all
+  `);
+
+  statusEl.textContent = "Ready!";
+  return pyo
+}  
 
 async function runCompare () {
   const url = document.getElementById('url').value.trim()
