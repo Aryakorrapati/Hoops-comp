@@ -10,7 +10,7 @@ async function bootPyodide () {
     pyodide.FS.writeFile(f, new Uint8Array(await resp.arrayBuffer()))
   }
   await pyodide.runPythonAsync(`
-    import micropip, sys, js, importlib.util, types
+    import sys, js, importlib.util, types
     # pandas & numpy are already built-in to Pyodide
     import legacy_script  # executes your file once
     compare = legacy_script.run_all        # entry point
