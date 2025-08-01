@@ -1,45 +1,48 @@
 /* global Chart */
 let pyodide, compareFunc
 
-// main.js  (only the bootPyodide function shown)
+// main.js
 async function bootPyodide () {
-  const statusEl = document.getElementById("status");
-  statusEl.textContent = "Loading Python…";
+  const log = txt => (document.getElementById("status").textContent = txt);
 
+  log("Loading Python runtime…");
   const pyodide = await loadPyodide({
     indexURL: "https://cdn.jsdelivr.net/pyodide/v0.27.1/full/",
-    stdin: () => null,
-    disableIntegrityCheck: true
+    disableIntegrityCheck: true,   // avoids the hash mismatch fiasco
   });
 
-  /* bring CSVs + script into the FS */
+  /* ① copy data files into Pyodide’s virtual FS */
   for (const f of [
     "pace.csv",
     "cbb_stats.csv",
     "nba_stats.csv",
     "legacy_script.py",
   ]) {
-    const resp = await fetch(f);
-    pyodide.FS.writeFile(f, new Uint8Array(await resp.arrayBuffer()));
+    const buf = await (await fetch(f)).arrayBuffer();
+    pyodide.FS.writeFile(f, new Uint8Array(buf));
   }
 
-  /* patch requests → fetch */
+  /* ② install the HTTP shim so `import requests` works */
+  log("Patching HTTP…");
+  await pyodide.loadPackage("pyodide-http");    // tiny wheel
   await pyodide.runPythonAsync(`
     import pyodide_http
-    pyodide_http.patch_all()   # makes 'import requests' work
+    pyodide_http.patch_all()   # provides fetch-backed 'requests'
   `);
 
-  /* heavy wheels that legacy_script really needs */
-  statusEl.textContent = "Downloading packages…";
+  /* ③ pull the heavy scientific stack */
+  log("Downloading packages (first visit only) …");
   await pyodide.loadPackage([
-    "pandas", "numpy", "matplotlib", "scikit-learn",
-    "scipy", "lxml"
+    "pandas", "numpy", "matplotlib", "scikit-learn", "scipy", "lxml",
   ]);
 
-  /* import the script & expose compare() to JS */
+  /* ④ import your monolith and expose run_all */
   await pyodide.runPythonAsync("import legacy_script as ls");
+  log("Ready!");
+
   return pyodide.globals.get("ls").get("run_all");
 }
+
 
 async function runCompare () {
   const url = document.getElementById('url').value.trim()
