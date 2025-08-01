@@ -7,4 +7,5 @@ beautifulsoup4
 lxml
 matplotlib
 requests
-gunicorn            # Render likes Gunicorn for process management
+gunicorn          
+cloudscraper>=1.2.71

@@ -721,31 +721,72 @@ def candidate_nbadraft_slugs(name: str):
         yield "-".join(tokens[1:])                    # drop the single initial
         yield "-".join([tokens[0] + tokens[1]] + tokens[2:])  # combine first two
 
-HEADERS = {
-    # rotate a handful if you like
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/125.0.0.0 Safari/537.36"
-    ),
-    "Accept-Language": "en-US,en;q=0.9",
-}
+HEADERS_LIST = [
+    # rotate a few realistic desktop UA strings:
+    ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+     "AppleWebKit/537.36 (KHTML, like Gecko) "
+     "Chrome/126.0.0.0 Safari/537.36"),
+    ("Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5) "
+     "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+     "Version/17.0 Safari/605.1.15"),
+]
+
+def _get_html_cloudflare(url: str, ua: str) -> str | None:
+    """Return page HTML or None on error/ban."""
+    scraper = cloudscraper.create_scraper(
+        browser={"custom": ua},
+        delay=2,                 # polite pause when Cloudflare says “wait”
+    )
+    try:
+        r = scraper.get(url, timeout=25)
+        if r.status_code == 404:
+            return None         # slug doesn't exist
+        if r.status_code != 200:
+            print(f"[WARN] NBADraft HTTP {r.status_code} at {url}")
+            return None
+        return r.text
+    except Exception as exc:
+        print(f"[WARN] NBADraft request failed: {exc}")
+        return None
 
 def fetch_nbadraft_ratings(player_name: str):
-    ...
+    NBADRAFT_FIELDS = ["Athleticism", "Strength", "Quickness"]
+    base = {f: None for f in NBADRAFT_FIELDS}
+
     for slug in candidate_nbadraft_slugs(player_name):
         url = f"https://www.nbadraft.net/players/{slug}/"
-        try:
-            resp = requests.get(url, headers=HEADERS, timeout=20, allow_redirects=True)
-            if resp.status_code not in (200, 404):
-                print(f"[WARN] {url} HTTP {resp.status_code} – retrying with delay")
-                time.sleep(random.uniform(1.0, 2.0))
-                continue
-            if resp.status_code == 404:
-                continue                       # try next slug
-        except requests.RequestException as exc:
-            print(f"[WARN] NBADraft fetch {url} failed: {exc}")
-            continue
+        html = _get_html_cloudflare(url, random.choice(HEADERS_LIST))
+        if html is None:
+            continue                        # try next slug
+
+        soup = BeautifulSoup(html, "html.parser")
+        ratings = dict(base)
+
+        # ---- parse the table ----
+        table = soup.find("table", class_="player-detail-table")
+        if table:
+            for row in table.find_all("tr"):
+                cells = [c.get_text(" ", strip=True) for c in row.find_all(["th", "td"])]
+                if len(cells) >= 2:
+                    key = cells[0].strip().lower()
+                    val = cells[1]
+                    for fld in NBADRAFT_FIELDS:
+                        if key.startswith(fld.lower()):
+                            try:
+                                ratings[fld] = int(val)
+                            except ValueError:
+                                pass
+
+        missing = {f for f, v in ratings.items() if v is None}
+        print(f"[INFO] NBADraft ratings for {player_name} ({slug}): "
+              + ", ".join(f"{k}={ratings[k] or 'N/A'}" for k in NBADRAFT_FIELDS))
+        return ratings, missing
+
+    # fall-back when every slug blocked / missing
+    print(f"[WARN] NBADraft page missing or blocked for {player_name}")
+    return base, set(NBADRAFT_FIELDS)
+
+
 # ---------- 2a.  DEFINE input_player_name_lower EARLY --------------
 input_player_name_lower = input_player_name.strip().lower()
 
