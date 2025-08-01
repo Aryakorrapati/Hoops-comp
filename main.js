@@ -9,6 +9,16 @@ async function bootPyodide () {
     const resp = await fetch(f)
     pyodide.FS.writeFile(f, new Uint8Array(await resp.arrayBuffer()))
   }
+
+  await pyodide.loadPackage([
+    "pandas",
+    "numpy",
+    "matplotlib",
+    "scikit-learn",
+    "lxml",
+    "beautifulsoup4",
+    "pillow"          // used by matplotlib for PNG
+  ]);
   await pyodide.runPythonAsync(`
     import sys, js, importlib.util, types
     # pandas & numpy are already built-in to Pyodide
