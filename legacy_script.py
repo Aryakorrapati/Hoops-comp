@@ -11,8 +11,7 @@ from math import erf as _erf
 import sys, re
 from bs4 import Comment
 import random, time
-import requests
-from project.compare.play_fetch import get_html_with_js  
+import requests  
 import bs4
 
 if not hasattr(np, "erf"):            # very old NumPy
@@ -793,6 +792,16 @@ def _parse_rating_table(html: str, ratings: dict) -> dict:
             if val is not None:
                 ratings[key] = val
     return ratings
+
+def get_html_with_js(url: str, timeout_ms: int = 30000) -> str | None:
+    try:
+        r = requests.get(url, timeout=timeout_ms / 1000, headers={
+            "User-Agent": "Mozilla/5.0 (Pyodide fetch)"
+            })        
+        return None if r.status_code != 200 else r.text
+    except Exception as exc:
+        print(f"[WARN] simple-fetch failed: {exc}")
+        return None
 
 def fetch_nbadraft_ratings(player_name: str):
     base = {f: None for f in NBADRAFT_FIELDS}
