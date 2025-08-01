@@ -1,18 +1,18 @@
 /* global Chart */
 let pyodide, compareFunc
 
+// main.js  (only the bootPyodide function shown)
 async function bootPyodide () {
   const statusEl = document.getElementById("status");
   statusEl.textContent = "Loading Python…";
 
-  /* 1️⃣  spin-up Pyodide from latest CDN */
   const pyodide = await loadPyodide({
     indexURL: "https://cdn.jsdelivr.net/pyodide/v0.27.1/full/",
     stdin: () => null,
-    disableIntegrityCheck: true          // fixes the hash-mismatch issue
+    disableIntegrityCheck: true
   });
 
-  /* 2️⃣  copy the CSVs + script into the Pyodide filesystem */
+  /* bring CSVs + script into the FS */
   for (const f of [
     "pace.csv",
     "cbb_stats.csv",
@@ -23,27 +23,23 @@ async function bootPyodide () {
     pyodide.FS.writeFile(f, new Uint8Array(await resp.arrayBuffer()));
   }
 
-  /* 3️⃣  pull in the scientific wheels */
-  statusEl.textContent = "Downloading packages…";
-  await pyodide.loadPackage([
-    "pandas",
-    "numpy",
-    "matplotlib",
-    "scikit-learn",
-    "scipy",
-    "lxml",
-  ]);
-
-  /* 4️⃣  wire legacy_script.run_all → JS */
+  /* patch requests → fetch */
   await pyodide.runPythonAsync(`
-    import sys, js
-    import legacy_script
-    compare = legacy_script.run_all
+    import pyodide_http
+    pyodide_http.patch_all()   # makes 'import requests' work
   `);
 
-  statusEl.textContent = "Ready!";
-  return pyo
-}  
+  /* heavy wheels that legacy_script really needs */
+  statusEl.textContent = "Downloading packages…";
+  await pyodide.loadPackage([
+    "pandas", "numpy", "matplotlib", "scikit-learn",
+    "scipy", "lxml"
+  ]);
+
+  /* import the script & expose compare() to JS */
+  await pyodide.runPythonAsync("import legacy_script as ls");
+  return pyodide.globals.get("ls").get("run_all");
+}
 
 async function runCompare () {
   const url = document.getElementById('url').value.trim()
