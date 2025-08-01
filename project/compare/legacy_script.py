@@ -776,42 +776,54 @@ def _digit_from_cell(td: BeautifulSoup) -> int | None:
 
     return None        # nothing found
 
+def _parse_rating_table(html: str, ratings: dict) -> dict:
+    """
+    Fill and return `ratings` (keys: Athleticism/Strength/Quickness)
+    using the first <table class="player-detail-table"> found.
+    """
+    soup  = BeautifulSoup(html, "html.parser")
+    table = soup.find("table", class_=re.compile("player-detail-table"))
+    if not table:
+        return ratings
+
+    for row in table.find_all("tr"):
+        th, *tds = row.find_all(["th", "td"])
+        if not tds:
+            continue
+        key = th.get_text(" ", strip=True).title()
+        if key in ratings and ratings[key] is None:
+            val = _digit_from_cell(tds[0])
+            if val is not None:
+                ratings[key] = val
+    return ratings
+
 def fetch_nbadraft_ratings(player_name: str):
     base = {f: None for f in NBADRAFT_FIELDS}
 
     for slug in candidate_nbadraft_slugs(player_name):
         url = f"https://www.nbadraft.net/players/{slug}/"
 
-        # ── 1. quick request via cloudscraper ──────────────────────
+        # ── A. fetch with cloudscraper (fast) ─────────────────────
         html = _get_html_cloudflare(url, random.choice(HEADERS_LIST))
         if html is None:
-            continue                               # try next slug
+            continue
 
-        # ── 2. fallback: if no digits in the first HTML, use Playwright ──
-        if not re.search(r"Athleticism.*\d", html, re.I | re.S):
-            html_js = get_html_with_js(url)        # ②  head-less Chromium
-            if html_js:                            #    (returns None on fail)
-                html = html_js                     #    replace with JS-rendered
+        ratings = _parse_rating_table(html, base.copy())
 
-        # ── 3. parse whichever HTML we ended up with ───────────────
-        soup     = BeautifulSoup(html, "html.parser")
-        ratings  = dict(base)
-        table = soup.find("table", class_=re.compile("player-detail-table"))
-        if table:
-            for row in table.find_all("tr"):
-                th, *tds = row.find_all(["th", "td"])
-                if not tds:
-                    continue
-                key = th.get_text(" ", strip=True).title()
-                if key in NBADRAFT_FIELDS and ratings[key] is None:
-                    val = _digit_from_cell(tds[0])      # ← uses the helper
-                    if val is not None:
-                        ratings[key] = val
+        # ── B. if ALL three are still None, try Playwright ────────
+        if all(v is None for v in ratings.values()):
+            print("[TRACE] all ratings None – running Playwright")
+            html_js = get_html_with_js(url, timeout_ms=45000)
+            if html_js:
+                ratings = _parse_rating_table(html_js, base.copy())
+                if any(v is not None for v in ratings.values()):
+                    print("[TRACE] Playwright succeeded")
 
         missing = {f for f, v in ratings.items() if v is None}
         print(
             f"[INFO] NBADraft ratings for {player_name} ({slug}): "
-            + ", ".join(f"{k}={ratings[k] or 'N/A'}" for k in NBADRAFT_FIELDS)
+            + ", ".join(f"{k}={ratings[k] if ratings[k] is not None else 'N/A'}"
+                        for k in NBADRAFT_FIELDS)
         )
         return ratings, missing
 
