@@ -12,6 +12,7 @@ import sys, re
 from bs4 import Comment
 import random, time
 import requests
+import cloudscraper
 
 if not hasattr(np, "erf"):            # very old NumPy
     np.erf = np.vectorize(_erf)
