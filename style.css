@@ -1,0 +1,6 @@
+body { font-family: system-ui, sans-serif; max-width: 740px; margin: 2rem auto; }
+input { width: 70%; padding: .5rem; }
+button { padding: .5rem 1rem; }
+#status { margin: .5rem 0; color: #066; font-weight: 600; }
+pre { white-space: pre-wrap; background:#f6f8fa; padding:1rem; }
+canvas { display:block; margin:1rem auto; border:1px solid #ddd; }
