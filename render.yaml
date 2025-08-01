@@ -5,7 +5,10 @@ services:
   region: oregon          # free regions: ohio, oregon, frankfurt
   plan: free
   buildCommand: pip install -r requirements.txt
-  startCommand: gunicorn -w 2 -k uvicorn.workers.UvicornWorker api.main:app
+  startCommand: >
+    gunicorn -w 2 -k uvicorn.workers.UvicornWorker
+             --timeout 180                       # ← 3 min
+             project.api.main:app
   envVars:
     - key: PYTHONUNBUFFERED
       value: "1"
