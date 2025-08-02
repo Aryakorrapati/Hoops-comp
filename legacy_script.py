@@ -16,6 +16,16 @@ import bs4
 import io
 import base64
 
+import urllib.parse
+
+def _http_get(url: str, **kw):
+    """
+    Fetch through the free AllOrigins CORS proxy so the browser
+    receives  Access-Control-Allow-Origin: *   headers.
+    """
+    proxy = "https://api.allorigins.win/raw?url=" + urllib.parse.quote(url, safe="")
+    return _http_get(proxy, **kw)
+
 if not hasattr(np, "erf"):            # very old NumPy
     np.erf = np.vectorize(_erf)
 elif not callable(getattr(np, "erf")):   # someone shadow‑patched it
@@ -205,7 +215,7 @@ def filter_by_physical_ratings(cbb: pd.DataFrame, target_name: str) -> pd.DataFr
     return cbb[mask]
 
 def get_cbb_stats_from_url(cbb_url, stat_cols):
-    r = requests.get(cbb_url)
+    r = _http_get(cbb_url)
     r.raise_for_status()
     soup = BeautifulSoup(r.text, 'html.parser')
 
@@ -308,7 +318,7 @@ def get_cbb_stats_from_url(cbb_url, stat_cols):
     )
 
 def extract_position_from_url(cbb_url):
-    r = requests.get(cbb_url)
+    r = _http_get(cbb_url)
     soup = BeautifulSoup(r.text, 'html.parser')
     meta_div = soup.find('div', id='meta') or soup.find('div', id='info')
     if not meta_div:
@@ -526,7 +536,7 @@ def run_compare(input_cbb_url: str) -> dict:
         Missing values return as None.
         """
         try:
-            r = requests.get(cbb_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
+            r = _http_get(cbb_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
             r.raise_for_status()
         except Exception as e:
             print(f"[WARN] Fetch failed for {cbb_url}: {e}")
@@ -796,7 +806,7 @@ def run_compare(input_cbb_url: str) -> dict:
 
     def get_html_with_js(url: str, timeout_ms: int = 30000) -> str | None:
         try:
-            r = requests.get(url, timeout=timeout_ms / 1000, headers={
+            r = _http_get(url, timeout=timeout_ms / 1000, headers={
                 "User-Agent": "Mozilla/5.0 (Pyodide fetch)"
                 })        
             return None if r.status_code != 200 else r.text

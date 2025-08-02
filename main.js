@@ -18,6 +18,9 @@ async function bootPyodide () {
     'numpy', 'pandas', 'matplotlib', 'scikit-learn',
     'lxml', 'beautifulsoup4', 'pyodide-http', 'requests'
   ]);
+  await pyodide.runPythonAsync(`
+import pyodide_http ; pyodide_http.patch_all()
+`)
 
   // c) copy the data-and-code files from GitHub pages → Pyodide FS
   const files = [
