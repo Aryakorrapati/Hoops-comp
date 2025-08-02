@@ -29,19 +29,18 @@ async function bootPyodide () {
     pyodide.FS.writeFile(f, new Uint8Array(await resp.arrayBuffer()));
   }
 
-  // d) ***MAKE legacy_script A REAL MODULE***
-  //    (this is what fixes the “No module named 'legacy_script'” error)
+    // d) ---------- make legacy_script importable ----------
   await pyodide.runPythonAsync(`
-import sys, importlib.util, types
+import sys, importlib.util
 spec = importlib.util.spec_from_file_location("legacy_script", "legacy_script.py")
 legacy_script = importlib.util.module_from_spec(spec)
 sys.modules["legacy_script"] = legacy_script
 spec.loader.exec_module(legacy_script)
   `);
 
-  // e) pull out the compare function for quick reuse
-  compareFunc = pyodide.globals.get('legacy_script').get('run_compare');
-  document.getElementById('status').textContent = 'Python ready ✔';
+  // e) pull out the Python function
+  const legacy_module = pyodide.globals.get('legacy_script');   // PyProxy (module)
+  compareFunc = legacy_module.run_compare;                      // <- NO .get() here
 }
 
 // -------------- 2.  Run a comparison on button-click --------
